@@ -66,47 +66,84 @@
 --|
 --+----------------------------------------------------------------------------
 library ieee;
-  use ieee.std_logic_1164.all;
-  use ieee.numeric_std.all;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
-
--- Lab 4
 entity top_basys3 is
     port(
-        -- inputs
-        clk     :   in std_logic; -- native 100MHz FPGA clock
-        sw      :   in std_logic_vector(15 downto 0);
-        btnU    :   in std_logic; -- master_reset
-        btnL    :   in std_logic; -- clk_reset
-        btnR    :   in std_logic; -- fsm_reset
-        
-        -- outputs
-        led :   out std_logic_vector(15 downto 0);
-        -- 7-segment display segments (active-low cathodes)
-        seg :   out std_logic_vector(6 downto 0);
-        -- 7-segment display active-low enables (anodes)
-        an  :   out std_logic_vector(3 downto 0)
+        clk     : in std_logic;
+        sw      : in std_logic_vector(15 downto 0);
+        btnU    : in std_logic;
+        btnL    : in std_logic;
+        btnR    : in std_logic;
+        led     : out std_logic_vector(15 downto 0);
+        seg     : out std_logic_vector(6 downto 0);
+        an      : out std_logic_vector(3 downto 0)
     );
 end top_basys3;
 
-architecture top_basys3_arch of top_basys3 is 
+architecture top_basys3_arch of top_basys3 is
   
-	-- declare components and signals
+    component clock_divider
+        generic (k_DIV: natural);
+        port (
+            i_clk   : in std_logic;
+            i_reset : in std_logic;
+            o_clk   : out std_logic
+        );
+    end component;
+    
+    component elevator_controller_fsm
+        port (
+            i_clk     : in std_logic;
+            i_reset   : in std_logic;
+            i_stop    : in std_logic;
+            i_up_down : in std_logic;
+            o_floor   : out std_logic_vector(3 downto 0)
+        );
+    end component;
+    
+    component sevenSegDecoder
+        port (
+            i_D : in std_logic_vector(3 downto 0);
+            o_S : out std_logic_vector(6 downto 0)
+        );
+    end component;
+    
+    -- Signals
+    signal slow_clk : std_logic;
+    signal elevator_floor : std_logic_vector(3 downto 0);
+    signal combined_reset : std_logic;
 
-  
 begin
-	-- PORT MAPS ----------------------------------------
 
-	
-	
-	-- CONCURRENT STATEMENTS ----------------------------
-	
-	-- LED 15 gets the FSM slow clock signal. The rest are grounded.
-	
+    combined_reset <= btnU or btnL or btnR; -- Combines all resets
+    
+    clk_div_instance: clock_divider
+        generic map (k_DIV => 25000000) -- Calculate to achieve a 2 Hz clock
+        port map (
+            i_clk   => clk,
+            i_reset => combined_reset,
+            o_clk   => slow_clk
+        );
 
-	-- leave unused switches UNCONNECTED. Ignore any warnings this causes.
-	
-	-- wire up active-low 7SD anodes (an) as required
-	-- Tie any unused anodes to power ('1') to keep them off
-	
+    elevator_ctl_instance: elevator_controller_fsm
+        port map (
+            i_clk     => slow_clk,
+            i_reset   => combined_reset,
+            i_stop    => sw(0), -- Assuming sw(0) is mapped to stop
+            i_up_down => sw(1), -- Assuming sw(1) is mapped to up/down
+            o_floor   => elevator_floor
+        );
+
+    seg_decoder_instance: sevenSegDecoder
+        port map (
+            i_D => elevator_floor,
+            o_S => seg
+        );
+
+    led(15) <= slow_clk; -- Show the clock signal on LED 15
+    led(14 downto 0) <= (others => '0'); -- Ground other LEDs
+    an <= "1110"; -- Activate only the second display (AN1)
+
 end top_basys3_arch;
